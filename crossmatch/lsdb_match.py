@@ -1,25 +1,27 @@
 """Real cross-match path: open two MMU HATS catalogs and stream matched image+spectrum records.
 
-This uses the documented LSDB API - ``lsdb.open_catalog(path, columns=...)`` then
-``left.crossmatch(right, n_neighbors=..., radius_arcsec=...)`` - and iterates the lazy result one
-partition at a time so only overlapping sky tiles are materialized (the point of the HATS release).
+Uses the documented LSDB API - ``lsdb.open_catalog(path, columns=...)`` then
+``left.crossmatch(right, n_neighbors=1, radius_arcsec=...)`` - iterating the lazy result one
+partition at a time so only overlapping sky tiles are materialized.
 
-Three things must be verified against the actual catalogs before a real run (they are config-driven,
-never guessed here):
+The MMU catalogs store image and spectrum data as nested structs, confirmed against the live
+catalogs (``print(catalog)`` shows the schema without downloading):
 
-1. the exact HATS paths for the image and spectrum catalogs (``*_catalog.hats_path`` in the config);
-2. that the matched frame carries the pixel/flux arrays (not coordinates only) - if a catalog is
-   coordinates-only, the arrays must be joined from the base ``MultimodalUniverse/*`` dataset by id;
-3. the exact column names for the image array, spectrum flux/wavelength, and redshift.
+- image catalog (e.g. ``UniverseTBD/mmu_ssl_legacysurvey_north``): column ``image`` is
+  ``nested<band, flux, ...>`` where ``flux`` is the per-band (H, W) cutout, so ``image.flux``
+  stacks to (n_bands, H, W).
+- spectrum catalog (e.g. ``UniverseTBD/mmu_desi_edr_sv3``): column ``spectrum`` is
+  ``nested<flux, ivar, lsf_sigma, lambda, mask>``, so ``spectrum.flux`` / ``spectrum.lambda`` are the
+  1-D flux and wavelength; redshift is the top-level ``Z`` and the quality flag is ``ZWARN``.
 
-The loader logs the available columns on open, and raises a clear error listing them if a configured
-column is absent, so a mismatch is obvious rather than silent.
+Crossmatch keeps ``image`` / ``spectrum`` / ``Z`` / ``ZWARN`` unsuffixed; only ``ra`` / ``dec`` /
+``object_id`` collide and get catalog-name suffixes, which are detected dynamically here.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Optional
 
 import numpy as np
 
@@ -27,101 +29,121 @@ from .schema import AlignedRecord
 
 logger = logging.getLogger(__name__)
 
-_SPEC_SUFFIX = "_spec"  # applied to the spectrum (right) catalog columns during crossmatch
+
+def _find_col(columns: List[str], base: str) -> Optional[str]:
+    """Return ``base`` if present, else the first column named ``base_<suffix>`` (crossmatch suffix)."""
+    if base in columns:
+        return base
+    for column in columns:
+        if column.startswith(base + "_"):
+            return column
+    return None
 
 
-def _to_image_array(value: Any) -> np.ndarray:
-    """Coerce a stored image cell to a ``(C, H, W)`` float32 array."""
-    if isinstance(value, dict) and "array" in value:
-        value = value["array"]
-    array = np.asarray(value, dtype=np.float32)
-    if array.ndim == 2:
-        array = array[None, :, :]  # single band -> (1, H, W)
-    if array.ndim != 3:
-        raise ValueError(f"Expected an image array of ndim 2 or 3, got shape {array.shape}")
-    return array
+def _nested_field(cell: Any, field: str) -> Any:
+    """Access a sub-field of a nested cell, whether it materializes as a DataFrame or a mapping."""
+    return cell[field]
 
 
-def _to_1d(value: Any) -> np.ndarray:
-    """Coerce a stored spectrum cell (flux or wavelength) to a 1-D float32 array."""
-    if isinstance(value, dict) and "array" in value:
-        value = value["array"]
-    array = np.asarray(value, dtype=np.float32).reshape(-1)
-    return array
+def _stack_image(cell: Any, flux_field: str) -> np.ndarray:
+    """Stack a nested image cell's per-band cutouts into a (n_bands, H, W) float32 array."""
+    flux = _nested_field(cell, flux_field)
+    bands = [np.asarray(band, dtype=np.float32) for band in flux]
+    return np.stack(bands, axis=0)
 
 
-def _require(row: Dict[str, Any], column: str, available: List[str]) -> Any:
-    if column not in row:
-        raise KeyError(
-            f"Column {column!r} not found in the matched frame. Available columns: {available}. "
-            "Update the *_column entries in the crossmatch config to match the opened catalog."
-        )
-    return row[column]
+def _to_1d(cell: Any, field: str) -> np.ndarray:
+    """Extract a 1-D float32 array (flux or wavelength) from a nested spectrum cell."""
+    value = _nested_field(cell, field)
+    array = value.to_numpy() if hasattr(value, "to_numpy") else np.asarray(value)
+    return np.asarray(array, dtype=np.float32).reshape(-1)
 
 
-def crossmatched_records(config: Dict[str, Any], max_objects: int | None = None) -> Iterator[AlignedRecord]:
-    """Yield ``AlignedRecord`` objects from the cross-match described by ``config``.
+def _is_bad_quality(value: Any) -> bool:
+    """True when a quality flag marks a bad row (ZWARN != 0 / True)."""
+    try:
+        return bool(value)
+    except (TypeError, ValueError):
+        return False
 
-    ``config`` is the parsed ``configs/crossmatch_*.yaml`` (image_catalog / spectrum_catalog / match).
-    """
+
+def _iter_partitions(matched):
+    """Yield computed partitions of a crossmatched catalog across LSDB versions."""
+    frame = getattr(matched, "_ddf", matched)
+    for delayed_partition in frame.to_delayed():
+        yield delayed_partition.compute()
+
+
+def crossmatched_records(config: Dict[str, Any], max_objects: Optional[int] = None) -> Iterator[AlignedRecord]:
+    """Yield ``AlignedRecord`` objects from the cross-match described by ``config``."""
     import lsdb  # imported lazily so the synthetic smoke path needs no astro stack
 
     img_cfg = config["image_catalog"]
     spec_cfg = config["spectrum_catalog"]
     match_cfg = config["match"]
 
-    img_columns = [img_cfg["ra_column"], img_cfg["dec_column"], img_cfg["image_column"], *img_cfg.get("extra_columns", [])]
-    spec_columns = [
-        spec_cfg["ra_column"],
-        spec_cfg["dec_column"],
-        spec_cfg["flux_column"],
-        spec_cfg["wavelength_column"],
-        spec_cfg["redshift_column"],
-        *spec_cfg.get("extra_columns", []),
+    image_columns = [
+        img_cfg["ra_column"], img_cfg["dec_column"], img_cfg["object_id_column"], img_cfg["image_column"]
     ]
+    spectrum_columns = [
+        spec_cfg["ra_column"], spec_cfg["dec_column"], spec_cfg["object_id_column"],
+        spec_cfg["spectrum_column"], spec_cfg["redshift_column"],
+    ]
+    quality_column = spec_cfg.get("quality_column")
+    if quality_column:
+        spectrum_columns.append(quality_column)
 
-    logger.info("Opening image catalog: %s (columns=%s)", img_cfg["hats_path"], img_columns)
-    image_cat = lsdb.open_catalog(img_cfg["hats_path"], columns=img_columns)
-    logger.info("Opening spectrum catalog: %s (columns=%s)", spec_cfg["hats_path"], spec_columns)
-    spectrum_cat = lsdb.open_catalog(spec_cfg["hats_path"], columns=spec_columns)
+    logger.info("Opening image catalog: %s", img_cfg["hats_path"])
+    image_cat = lsdb.open_catalog(img_cfg["hats_path"], columns=image_columns)
+    logger.info("Opening spectrum catalog: %s", spec_cfg["hats_path"])
+    spectrum_cat = lsdb.open_catalog(spec_cfg["hats_path"], columns=spectrum_columns)
 
     matched = image_cat.crossmatch(
         spectrum_cat,
         n_neighbors=int(match_cfg.get("n_neighbors", 1)),
         radius_arcsec=float(match_cfg.get("radius_arcsec", 1.0)),
-        suffixes=("", _SPEC_SUFFIX),
+        suffix_method="overlapping_columns",
     )
 
     image_col = img_cfg["image_column"]
-    flux_col = spec_cfg["flux_column"] + _SPEC_SUFFIX
-    wavelength_col = spec_cfg["wavelength_column"] + _SPEC_SUFFIX
-    redshift_col = spec_cfg["redshift_column"] + _SPEC_SUFFIX
-    ra_col = img_cfg["ra_column"]
-    dec_col = img_cfg["dec_column"]
+    image_flux_field = img_cfg["image_flux_field"]
+    spectrum_col = spec_cfg["spectrum_column"]
+    flux_field = spec_cfg["flux_field"]
+    wavelength_field = spec_cfg["wavelength_field"]
+    redshift_col = spec_cfg["redshift_column"]
 
     n_yielded = 0
-    # Iterate partition by partition (one overlapping sky tile at a time) so memory stays bounded.
-    for delayed_partition in matched.to_delayed():
-        partition = delayed_partition.compute()
+    n_skipped_quality = 0
+    for partition in _iter_partitions(matched):
         if partition is None or len(partition) == 0:
             continue
-        available = list(partition.columns)
-        for position, (_, row) in enumerate(partition.iterrows()):
-            row = row.to_dict()
-            image = _to_image_array(_require(row, image_col, available))
-            flux = _to_1d(_require(row, flux_col, available))
-            wavelength = _to_1d(_require(row, wavelength_col, available))
-            redshift = _require(row, redshift_col, available)
+        columns = list(partition.columns)
+        oid_col = _find_col(columns, spec_cfg["object_id_column"]) or _find_col(columns, img_cfg["object_id_column"])
+        ra_col = _find_col(columns, img_cfg["ra_column"])
+        dec_col = _find_col(columns, img_cfg["dec_column"])
+
+        for i in range(len(partition)):
+            if quality_column and _is_bad_quality(partition[quality_column].iloc[i]):
+                n_skipped_quality += 1
+                continue
+            image = _stack_image(partition[image_col].iloc[i], image_flux_field)
+            spectrum_cell = partition[spectrum_col].iloc[i]
+            flux = _to_1d(spectrum_cell, flux_field)
+            wavelength = _to_1d(spectrum_cell, wavelength_field)
+            redshift = float(partition[redshift_col].iloc[i])
+
             yield AlignedRecord(
-                object_id=str(row.get("object_id", f"{n_yielded:09d}")),
-                ra=float(row.get(ra_col, np.nan)),
-                dec=float(row.get(dec_col, np.nan)),
+                object_id=str(partition[oid_col].iloc[i]) if oid_col else f"{n_yielded:09d}",
+                ra=float(partition[ra_col].iloc[i]) if ra_col else float("nan"),
+                dec=float(partition[dec_col].iloc[i]) if dec_col else float("nan"),
                 image=image,
                 spectrum_flux=flux,
                 spectrum_wavelength=wavelength,
-                catalog={"redshift": float(redshift)},
+                catalog={"redshift": redshift},
             )
             n_yielded += 1
             if max_objects is not None and n_yielded >= max_objects:
-                logger.info("Reached max_objects=%d; stopping.", max_objects)
+                logger.info("Reached max_objects=%d (skipped %d on quality).", max_objects, n_skipped_quality)
                 return
+
+    logger.info("Yielded %d matched records (skipped %d on quality).", n_yielded, n_skipped_quality)

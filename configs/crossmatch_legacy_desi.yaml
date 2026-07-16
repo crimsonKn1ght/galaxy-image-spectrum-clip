@@ -1,32 +1,30 @@
 # Phase 0: cross-match Legacy Surveys images against DESI spectra on sky position.
 #
-# HATS catalogs are opened from Hugging Face with the hf:// protocol; the real repos live in
-# https://huggingface.co/collections/UniverseTBD/multimodal-universe-hats
-# The column names below are still best-guesses at MMU's schema. Confirm them (and the
-# arrays-present check) by running: python scripts/verify_catalogs.py --config <this file>
-# which prints each catalog's actual columns.
+# Catalogs and schema were confirmed against the live HATS catalogs (print(catalog) shows the
+# nested schema without downloading). The image catalog is the north-cap self-supervised Legacy
+# Surveys imaging, which overlaps DESI EDR; the DR10-south "test" build does NOT overlap DESI EDR.
+# Set a Hugging Face token (huggingface-cli login / HF_TOKEN) before running to avoid 504s.
 
 image_catalog:
-  # DECaLS/Legacy Surveys imaging (the imaging DESI targets from, so it overlaps DESI well).
-  # Alternative image catalog: hf://datasets/UniverseTBD/mmu_ssl_legacysurvey_north
-  # Confirm this catalog's size and crossmatch yield against mmu_desi_edr_sv3 before a full build.
-  hats_path: "hf://datasets/UniverseTBD/mmu_legacysurvey_test"
-  base_hf_id: MultimodalUniverse/legacysurvey
+  # image column is nested<band, flux, psf_fwhm, scale>; image.flux is the per-band (H, W) cutout.
+  hats_path: "hf://datasets/UniverseTBD/mmu_ssl_legacysurvey_north"
   ra_column: ra
   dec_column: dec
-  image_column: image            # multi-band (g, r, z) pixel array (confirm name via verify script)
-  extra_columns: []
+  object_id_column: object_id
+  image_column: image
+  image_flux_field: flux         # sub-field of the image struct -> stacked to (n_bands, H, W)
 
 spectrum_catalog:
-  # DESI Early Data Release, Survey Validation 3 spectra (the AstroCLIP pairing).
+  # spectrum column is nested<flux, ivar, lsf_sigma, lambda, mask>; redshift is Z, quality is ZWARN.
   hats_path: "hf://datasets/UniverseTBD/mmu_desi_edr_sv3"
-  base_hf_id: MultimodalUniverse/desi
   ra_column: ra
   dec_column: dec
-  flux_column: flux              # spectrum flux array (confirm name via verify script)
-  wavelength_column: lambda      # spectrum wavelength grid (confirm name via verify script)
-  redshift_column: redshift      # spectroscopic redshift, primary probe target (confirm name)
-  extra_columns: []
+  object_id_column: object_id
+  spectrum_column: spectrum
+  flux_field: flux               # sub-field of the spectrum struct (1-D flux)
+  wavelength_field: lambda       # sub-field of the spectrum struct (1-D wavelength)
+  redshift_column: Z             # spectroscopic redshift (primary probe target)
+  quality_column: ZWARN          # rows where this is truthy (ZWARN != 0) are skipped
 
 match:
   radius_arcsec: 1.0             # standard optical same-object radius; matches the blog example
@@ -35,7 +33,7 @@ match:
 output:
   output_dir: aligned/legacy_desi
   shard_size: 512                # objects per .npz shard
-  n_objects: 20000              # cap for laptop-scale prototyping (raise on a bigger machine)
+  n_objects: 20000               # cap for laptop-scale prototyping (raise on a bigger machine)
 
 split:
   seed: 42

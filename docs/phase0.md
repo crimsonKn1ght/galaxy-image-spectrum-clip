@@ -34,9 +34,10 @@ pip install lsdb hats astropy huggingface_hub numpy pyyaml
 MMU HATS catalogs are opened from Hugging Face with the `hf://` protocol, for example
 `lsdb.open_catalog("hf://datasets/UniverseTBD/mmu_gz10")`. The config already points at:
 
-- images: `hf://datasets/UniverseTBD/mmu_legacysurvey_test`
-  (alternative: `hf://datasets/UniverseTBD/mmu_ssl_legacysurvey_north`)
-- spectra: `hf://datasets/UniverseTBD/mmu_desi_edr_sv3`
+- images: `hf://datasets/UniverseTBD/mmu_ssl_legacysurvey_north` (north-cap Legacy Surveys imaging;
+  the DR10-south `mmu_legacysurvey_test` build was found NOT to overlap DESI EDR)
+- spectra: `hf://datasets/UniverseTBD/mmu_desi_edr_sv3` (also overlaps `mmu_sdss_sdss` if you prefer
+  SDSS spectra instead)
 
 To see the full list of available HATS repos (the source of truth for names):
 
