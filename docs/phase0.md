@@ -113,3 +113,31 @@ The aligned dataset lands under `aligned/legacy_desi/`, ready for `run_baseline.
   1 (nearest match only).
 - `split.seed`, `split.val_fraction`, `split.test_fraction` control the deterministic, per-object
   train/val/test split written into the manifest.
+
+## Troubleshooting real-data reads
+
+- HTTP 504 / read timeouts while streaming catalog data: set a Hugging Face token first
+  (`huggingface-cli login`, or `export HF_TOKEN=...`). Unauthenticated requests are rate-limited and
+  are the most common cause of gateway timeouts on the HATS parquet reads. Raising the client timeout
+  (`export HF_HUB_DOWNLOAD_TIMEOUT=120`) also helps.
+- Do not pass `read_moc=False` to `open_catalog`: in current LSDB it leaks into the parquet reader
+  (`read_table() got an unexpected keyword argument 'read_moc'`) and can break overlap detection.
+  Open catalogs normally.
+- Inspect the schema without downloading: `print(cat)` shows the full column schema, including nested
+  structs, from metadata only. Use it to read struct sub-fields (for example the image `flux`/`band`
+  or the spectrum arrays) before touching any data.
+- Reliable offline path when streaming is flaky: download the catalog once and open the local path.
+
+  ```python
+  from huggingface_hub import snapshot_download
+  local = snapshot_download("UniverseTBD/mmu_legacysurvey_test", repo_type="dataset",
+                            local_dir="/workspace/hats/legacy_test")
+  img = lsdb.open_catalog(local + "/mmu_legacysurvey_dr10_south_21", columns=["object_id", "ra", "dec", "image"])
+  ```
+
+  The image catalog is about 3.6 GB; downloading it fully is fine. For the much larger DESI catalog,
+  prefer streaming the crossmatch (only overlapping tiles load) with a token set.
+- `RuntimeError: Catalogs do not overlap`: the two catalogs share no sky tiles. First confirm you did
+  not open with `read_moc=False`, then re-check the crossmatch. If it persists, the chosen image sample
+  does not cover the spectrum survey's footprint - switch the image catalog (for example to
+  `mmu_ssl_legacysurvey_north`).
