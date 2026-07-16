@@ -68,10 +68,17 @@ def _is_bad_quality(value: Any) -> bool:
 
 
 def _iter_partitions(matched):
-    """Yield computed partitions of a crossmatched catalog across LSDB versions."""
-    frame = getattr(matched, "_ddf", matched)
-    for delayed_partition in frame.to_delayed():
-        yield delayed_partition.compute()
+    """Yield computed partitions of a crossmatched catalog, memory-bounded when possible.
+
+    Prefers per-partition streaming via ``to_delayed`` (on the LSDB catalog or its underlying
+    nested-dask frame); falls back to a single ``compute`` if neither is available.
+    """
+    for candidate in (getattr(matched, "_ddf", None), matched):
+        if candidate is not None and hasattr(candidate, "to_delayed"):
+            for delayed_partition in candidate.to_delayed():
+                yield delayed_partition.compute()
+            return
+    yield matched.compute()
 
 
 def crossmatched_records(config: Dict[str, Any], max_objects: Optional[int] = None) -> Iterator[AlignedRecord]:
