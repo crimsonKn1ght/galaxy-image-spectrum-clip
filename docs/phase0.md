@@ -26,7 +26,7 @@ build is a few GB. Pick `output.n_objects` accordingly.
 Phase 0 does not import torch or transformers. On the machine doing the build:
 
 ```
-pip install lsdb hats astropy numpy pyyaml
+pip install lsdb hats astropy huggingface_hub numpy pyyaml
 ```
 
 ## Step 2: verify the catalogs (do this first, on the laptop)
@@ -96,7 +96,7 @@ On the RunPod instance where Phase 2 will run:
 
 ```
 git pull                                   # get your verified config
-pip install lsdb hats astropy numpy pyyaml
+pip install lsdb hats astropy huggingface_hub numpy pyyaml
 # raise output.n_objects to your target (for example 20000) in the config, then:
 python build_crossmatch.py --config configs/crossmatch_legacy_desi.yaml
 ```
