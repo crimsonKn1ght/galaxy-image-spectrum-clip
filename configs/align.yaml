@@ -45,7 +45,7 @@ training:
   eval_steps: 100
   save_steps: 100
   eval_num_samples: 0                  # 0 = score the whole val split each eval
-  dataloader_num_workers: 4
+  dataloader_num_workers: 8            # raise toward CPU core count if the GPU still starves
   seed: 42
 
 eval:
