@@ -31,9 +31,23 @@ pip install lsdb hats astropy numpy pyyaml
 
 ## Step 2: verify the catalogs (do this first, on the laptop)
 
-The config ships with placeholder `hats_path` values and best-guess column names. Resolve the real
-HATS paths from the collection https://huggingface.co/collections/UniverseTBD/multimodal-universe-hats
-and fill them into `configs/crossmatch_legacy_desi.yaml`, then run:
+MMU HATS catalogs are opened from Hugging Face with the `hf://` protocol, for example
+`lsdb.open_catalog("hf://datasets/UniverseTBD/mmu_gz10")`. The config already points at:
+
+- images: `hf://datasets/UniverseTBD/mmu_legacysurvey_test`
+  (alternative: `hf://datasets/UniverseTBD/mmu_ssl_legacysurvey_north`)
+- spectra: `hf://datasets/UniverseTBD/mmu_desi_edr_sv3`
+
+To see the full list of available HATS repos (the source of truth for names):
+
+```python
+from huggingface_hub import HfApi
+for d in HfApi().list_datasets(author="UniverseTBD"):
+    if "mmu" in d.id:
+        print(d.id)
+```
+
+Then run the verifier:
 
 ```
 python scripts/verify_catalogs.py --config configs/crossmatch_legacy_desi.yaml
@@ -42,7 +56,9 @@ python scripts/verify_catalogs.py --config configs/crossmatch_legacy_desi.yaml
 It opens both catalogs, prints their columns, checks that the configured column names
 (image / flux / wavelength / redshift / ra / dec) exist, peeks one row to confirm the image and flux
 cells are real arrays (not a coordinates-only catalog), and exits non-zero if anything is wrong. Fix
-the config until it prints `SUMMARY: PASS`.
+the column names in the config to match the printed columns until it prints `SUMMARY: PASS`. Before the
+full build, sanity-check that the chosen image catalog actually overlaps DESI EDR by matching a small
+sample and confirming a non-trivial match count.
 
 If a catalog turns out to be coordinates-only, the arrays must be joined from the base
 `MultimodalUniverse/legacysurvey` / `MultimodalUniverse/desi` datasets by id. That path is documented

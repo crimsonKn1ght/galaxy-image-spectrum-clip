@@ -1,27 +1,31 @@
 # Phase 0: cross-match Legacy Surveys images against DESI spectra on sky position.
 #
-# The exact HATS catalog paths must be resolved and VERIFIED against the collection
+# HATS catalogs are opened from Hugging Face with the hf:// protocol; the real repos live in
 # https://huggingface.co/collections/UniverseTBD/multimodal-universe-hats
-# before running. Base (non-HATS) datasets are MultimodalUniverse/legacysurvey and
-# MultimodalUniverse/desi. Column names below are the values the loader reads; confirm
-# them against the opened catalog (crossmatch/lsdb_match.py logs the available columns).
+# The column names below are still best-guesses at MMU's schema. Confirm them (and the
+# arrays-present check) by running: python scripts/verify_catalogs.py --config <this file>
+# which prints each catalog's actual columns.
 
 image_catalog:
-  hats_path: "VERIFY://UniverseTBD/legacysurvey-hats"   # resolve exact HATS path/URL
+  # DECaLS/Legacy Surveys imaging (the imaging DESI targets from, so it overlaps DESI well).
+  # Alternative image catalog: hf://datasets/UniverseTBD/mmu_ssl_legacysurvey_north
+  # Confirm this catalog's size and crossmatch yield against mmu_desi_edr_sv3 before a full build.
+  hats_path: "hf://datasets/UniverseTBD/mmu_legacysurvey_test"
   base_hf_id: MultimodalUniverse/legacysurvey
   ra_column: ra
   dec_column: dec
-  image_column: image            # multi-band (g, r, z) pixel array
+  image_column: image            # multi-band (g, r, z) pixel array (confirm name via verify script)
   extra_columns: []
 
 spectrum_catalog:
-  hats_path: "VERIFY://UniverseTBD/desi-hats"           # resolve exact HATS path/URL
+  # DESI Early Data Release, Survey Validation 3 spectra (the AstroCLIP pairing).
+  hats_path: "hf://datasets/UniverseTBD/mmu_desi_edr_sv3"
   base_hf_id: MultimodalUniverse/desi
   ra_column: ra
   dec_column: dec
-  flux_column: flux              # spectrum flux array
-  wavelength_column: lambda      # spectrum wavelength grid
-  redshift_column: redshift      # spectroscopic redshift (primary probe target)
+  flux_column: flux              # spectrum flux array (confirm name via verify script)
+  wavelength_column: lambda      # spectrum wavelength grid (confirm name via verify script)
+  redshift_column: redshift      # spectroscopic redshift, primary probe target (confirm name)
   extra_columns: []
 
 match:
