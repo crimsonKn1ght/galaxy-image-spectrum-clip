@@ -32,6 +32,13 @@ def main() -> None:
     parser.add_argument("--image-size", type=int, default=16, help="synthetic image side length")
     parser.add_argument("--n-bins", type=int, default=128, help="synthetic spectrum length")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--max-objects",
+        type=int,
+        default=None,
+        help="real build: cap the number of matched objects, overriding output.n_objects "
+        "(handy for a quick trial before the full build)",
+    )
     args = parser.parse_args()
 
     if args.synthetic:
@@ -60,14 +67,15 @@ def main() -> None:
 
     out = config["output"]
     split = config["split"]
+    n_objects = args.max_objects if args.max_objects is not None else out.get("n_objects")
     write_aligned_dataset(
-        records=crossmatched_records(config, max_objects=out.get("n_objects")),
+        records=crossmatched_records(config, max_objects=n_objects),
         output_dir=out["output_dir"],
         shard_size=int(out.get("shard_size", 512)),
         seed=int(split.get("seed", 42)),
         val_fraction=float(split.get("val_fraction", 0.1)),
         test_fraction=float(split.get("test_fraction", 0.1)),
-        max_objects=out.get("n_objects"),
+        max_objects=n_objects,
     )
 
 
