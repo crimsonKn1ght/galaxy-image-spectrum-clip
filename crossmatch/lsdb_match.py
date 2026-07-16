@@ -45,11 +45,23 @@ def _nested_field(cell: Any, field: str) -> Any:
     return cell[field]
 
 
+def _to_2d(band: Any) -> np.ndarray:
+    """Materialize one band's cutout into a 2-D float32 array.
+
+    nested-pandas returns the per-band flux as a 1-D object array whose elements are the image rows,
+    so ``np.asarray(band, dtype=np.float32)`` on it raises "setting an array element with a sequence".
+    Rebuild via Python lists in that case; pass through when it is already a numeric 2-D array.
+    """
+    arr = np.asarray(band)
+    if arr.dtype != object:
+        return arr.astype(np.float32, copy=False)
+    return np.asarray(arr.tolist(), dtype=np.float32)
+
+
 def _stack_image(cell: Any, flux_field: str) -> np.ndarray:
     """Stack a nested image cell's per-band cutouts into a (n_bands, H, W) float32 array."""
     flux = _nested_field(cell, flux_field)
-    bands = [np.asarray(band, dtype=np.float32) for band in flux]
-    return np.stack(bands, axis=0)
+    return np.stack([_to_2d(band) for band in flux], axis=0)
 
 
 def _to_1d(cell: Any, field: str) -> np.ndarray:
