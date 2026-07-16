@@ -14,7 +14,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from data.image_processing import clip_image_transform, raw_image_transform
+from data.image_processing import (
+    clip_batch_transform,
+    clip_image_transform,
+    raw_batch_transform,
+    raw_image_transform,
+)
 
 
 class ClipImageEncoder(nn.Module):
@@ -45,6 +50,11 @@ class ClipImageEncoder(nn.Module):
         else:
             raise ValueError(f"Unknown select_feature {self.select_feature!r} (pooled | patch_mean)")
         return feature.detach()
+
+    @torch.no_grad()
+    def batch_embed(self, images: np.ndarray, image_cfg: Dict, device: torch.device) -> torch.Tensor:
+        """Preprocess a raw (B, C, H, W) image batch on-device and return CLIP features (feature cache)."""
+        return self.embed(clip_batch_transform(images, image_cfg, device))
 
 
 class FlattenImageEncoder(nn.Module):
@@ -77,6 +87,12 @@ class FlattenImageEncoder(nn.Module):
         flat = pixel_values.reshape(pixel_values.shape[0], -1)
         self._ensure_projection(flat.shape[1], flat.device)
         return (flat @ self.projection).detach()
+
+    @torch.no_grad()
+    def batch_embed(self, images: np.ndarray, image_cfg: Dict, device: torch.device) -> torch.Tensor:
+        """Preprocess a raw (B, C, H, W) image batch on-device and return features (feature cache)."""
+        standardized = raw_batch_transform(images, device)
+        return self.embed(standardized)
 
 
 def build_image_encoder(image_cfg: Dict) -> nn.Module:

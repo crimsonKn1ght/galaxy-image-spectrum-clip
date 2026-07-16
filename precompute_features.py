@@ -33,7 +33,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Cache frozen image-tower features for fast training")
     parser.add_argument("--config", type=str, required=True, help="config with the source image encoder")
     parser.add_argument("--out-dir", type=str, required=True, help="output aligned dataset (features)")
-    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--batch-size", type=int, default=256)
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -41,7 +41,7 @@ def main() -> None:
     logger.info("Device: %s", device)
 
     encoder = build_image_encoder(config["image_encoder"]).to(device).eval()
-    image_transform = encoder.build_transform(config["data"]["image"])
+    image_cfg = config["data"]["image"]
     logger.info("Image encoder output_dim: %d (set this as image_encoder.output_dim in the cached config)", encoder.output_dim)
 
     src = config["data"]["aligned_dir"]
@@ -60,9 +60,8 @@ def main() -> None:
         features = []
         for start in range(0, len(images), args.batch_size):
             batch = images[start : start + args.batch_size]
-            tensors = torch.stack([image_transform(img) for img in batch]).to(device)
             with torch.no_grad():
-                features.append(encoder.embed(tensors).float().cpu().numpy())
+                features.append(encoder.batch_embed(batch, image_cfg, device).float().cpu().numpy())
         features_array = (
             np.concatenate(features) if features else np.zeros((0, encoder.output_dim), dtype=np.float32)
         )
