@@ -121,10 +121,22 @@ is normalized: recall@1 lift over chance went from ~18x (20k: 0.0090 over 2000) 
 over ~13.8k), with @5/@10 similarly ~2.5x better, even though the raw recall@1 reads lower purely
 because of the larger pool.
 
+Confirmed on matched pools. Evaluating both models over random 2000-object subsets of their test
+splits (20 subsets each) puts retrieval on equal footing and removes the pool-size artifact:
+
+| recall@k | 20k | 138k (2000-pool) |
+|---|---|---|
+| @1  | 0.0090 | 0.0176 +/- 0.0024 |
+| @5  | 0.0390 | 0.0677 +/- 0.0046 |
+| @10 | 0.0745 | 0.1186 +/- 0.0057 |
+
+More data roughly doubled recall@1 (and ~1.6-1.7x at @5/@10), with tight error bars - a real retrieval
+gain, not just the lower val loss. This is the honest way to compare across dataset sizes; raw recall@k
+on the full test set is not comparable because it scales with the candidate count.
+
 Bottom line: more data helped as predicted. A gap of ~1.2 remains and absolute retrieval is still
-modest, so the remaining levers are regularization (now cheap) and the frozen image tower (image probe
-R2 ~0.67 is the ceiling). To compare retrieval honestly across dataset sizes, evaluate over a
-fixed-size candidate pool (average recall over random 2000-object subsets of the test split).
+modest, so the remaining levers are regularization (now cheap, knobs wired below) and the frozen image
+tower (image probe R2 ~0.67 is the ceiling).
 
 ## Recommended next steps (ordered by leverage vs cost)
 
