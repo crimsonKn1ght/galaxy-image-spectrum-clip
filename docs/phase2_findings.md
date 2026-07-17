@@ -115,9 +115,10 @@ Iteration is now ~1 minute per full run, so the cheap levers are worth trying fi
    attacks the gap and gives the loss far more negatives and diversity. Rebuild via
    `build_crossmatch.py` -> `precompute_features.py` -> `run_baseline.py` -> `train.py` ->
    `evaluate.py`. Two practical notes: the raw build is on the order of 40 GB and the CLIP precompute
-   runs once over ~138k images (GPU-bound); and with `shard_cache_size: 0` the cached set (~a few GB)
-   is held in RAM per dataloader worker, so watch RAM against `dataloader_num_workers` (reduce workers
-   or set a finite cache that still covers all shards if memory is tight).
+   runs once over ~138k images (GPU-bound); and `precompute_features` now resamples spectra onto the
+   model grid before caching (they used to be stored at full ~7.8k DESI resolution), so the cached
+   138k set is ~1.7 GB rather than ~9 GB and `shard_cache_size: 0` stays affordable in RAM even with a
+   few dataloader workers.
 
 3. **Replace or unfreeze the image tower (highest ceiling, biggest cost).** Swap frozen CLIP for a
    galaxy-appropriate image encoder (AstroCLIP / DINO trained on galaxy cutouts) or fine-tune part of
