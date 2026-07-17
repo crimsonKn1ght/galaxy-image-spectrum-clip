@@ -99,6 +99,33 @@ The alignment works, but only at a coarse level, and the model overfits the fine
    structure absent from the CLIP features cannot be recovered downstream. This caps top-1 retrieval
    regardless of the spectrum side or the projection.
 
+## Update: full ~138k build result
+
+Rebuilding with the cap raised (~137,600 good pairs; ~110k train / ~13.8k val / ~13.8k test) and
+retraining confirms the overfitting diagnosis and the more-data prediction.
+
+Anchor on the pool-independent metric. Retrieval recall@k is *not* comparable to the 20k run because
+the test pool grew ~7x (chance recall@1 falls from 1/2000 to ~1/13,800). The in-batch InfoNCE val loss
+is computed over batches of 256 in both runs, so it is directly comparable:
+
+| metric (final)  | 20k run | 138k run |
+|---|---|---|
+| train loss      | 2.46    | 2.96     |
+| val loss        | 4.81    | 4.17     |
+| train/val gap   | 2.35    | 1.21     |
+| image probe R2  | 0.659   | 0.674    |
+
+Train loss rose and val loss fell, roughly halving the generalization gap - the textbook signature of
+reduced overfitting, exactly what more data was expected to do. Retrieval also improved once pool size
+is normalized: recall@1 lift over chance went from ~18x (20k: 0.0090 over 2000) to ~45x (138k: 0.0033
+over ~13.8k), with @5/@10 similarly ~2.5x better, even though the raw recall@1 reads lower purely
+because of the larger pool.
+
+Bottom line: more data helped as predicted. A gap of ~1.2 remains and absolute retrieval is still
+modest, so the remaining levers are regularization (now cheap) and the frozen image tower (image probe
+R2 ~0.67 is the ceiling). To compare retrieval honestly across dataset sizes, evaluate over a
+fixed-size candidate pool (average recall over random 2000-object subsets of the test split).
+
 ## Recommended next steps (ordered by leverage vs cost)
 
 Iteration is now ~1 minute per full run, so the cheap levers are worth trying first.
