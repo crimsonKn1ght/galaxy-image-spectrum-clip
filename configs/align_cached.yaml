@@ -11,6 +11,9 @@
 
 data:
   aligned_dir: aligned/legacy_desi_clipfeat   # produced by precompute_features.py
+  shard_cache_size: 0                          # cached features are tiny: keep every shard resident
+                                               # (0 = unbounded) so the shuffled loader stops
+                                               # re-decompressing shards each step and the GPU stays fed
   image:
     bands: [g, r, z]                           # unused by the identity encoder; kept for parity
     image_size: 224

@@ -16,6 +16,13 @@ class ProjectionHead(nn.Module):
     def __init__(self, input_dim: int, shared_dim: int, hidden_dim: Optional[int] = None):
         super().__init__()
         hidden_dim = hidden_dim or shared_dim
+        # Normalize the encoder features before projection. Frozen image-tower features (e.g. cached
+        # CLIP penultimate hidden states) carry a handful of massive, near-constant "outlier"
+        # activations whose scale swamps the informative directions; feeding them in raw makes the
+        # projection ill-conditioned and starves alignment. A LayerNorm puts every input dimension on
+        # a comparable scale (and matches the per-spectrum normalization the flux side already gets),
+        # which is standard for CLIP-style connectors over frozen features.
+        self.input_norm = nn.LayerNorm(input_dim)
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.GELU(),
@@ -23,4 +30,4 @@ class ProjectionHead(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.mlp(x)
+        return self.mlp(self.input_norm(x))
