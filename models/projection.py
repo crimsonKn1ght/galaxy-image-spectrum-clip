@@ -13,7 +13,7 @@ import torch.nn as nn
 
 
 class ProjectionHead(nn.Module):
-    def __init__(self, input_dim: int, shared_dim: int, hidden_dim: Optional[int] = None):
+    def __init__(self, input_dim: int, shared_dim: int, hidden_dim: Optional[int] = None, dropout: float = 0.0):
         super().__init__()
         hidden_dim = hidden_dim or shared_dim
         # Normalize the encoder features before projection. Frozen image-tower features (e.g. cached
@@ -23,9 +23,12 @@ class ProjectionHead(nn.Module):
         # a comparable scale (and matches the per-spectrum normalization the flux side already gets),
         # which is standard for CLIP-style connectors over frozen features.
         self.input_norm = nn.LayerNorm(input_dim)
+        # Optional dropout to fight overfitting; ``dropout=0.0`` (default) is a no-op and adds no
+        # parameters, so checkpoints stay compatible.
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.GELU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden_dim, shared_dim),
         )
 

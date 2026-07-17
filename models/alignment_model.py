@@ -46,12 +46,16 @@ class CrossModalAlignment(nn.Module):
             hidden_channels=tuple(spec_cfg.get("hidden_channels", [64, 128, 256])),
             kernel_size=int(spec_cfg.get("kernel_size", 5)),
             embedding_dim=int(spec_cfg.get("embedding_dim", 512)),
+            dropout=float(spec_cfg.get("dropout", 0.0)),
+            augment_noise_std=float(spec_cfg.get("augment_noise_std", 0.0)),
+            augment_mask_frac=float(spec_cfg.get("augment_mask_frac", 0.0)),
         )
         proj_cfg = config["projection"]
         shared_dim = int(proj_cfg.get("shared_dim", 512))
         hidden_dim = int(proj_cfg.get("hidden_dim", shared_dim))
-        image_projection = ProjectionHead(image_encoder.output_dim, shared_dim, hidden_dim)
-        spectrum_projection = ProjectionHead(spectrum_encoder.output_dim, shared_dim, hidden_dim)
+        proj_dropout = float(proj_cfg.get("dropout", 0.0))
+        image_projection = ProjectionHead(image_encoder.output_dim, shared_dim, hidden_dim, dropout=proj_dropout)
+        spectrum_projection = ProjectionHead(spectrum_encoder.output_dim, shared_dim, hidden_dim, dropout=proj_dropout)
         temperature_init = float(config.get("model", {}).get("temperature_init", 0.07))
         return cls(image_encoder, spectrum_encoder, image_projection, spectrum_projection, temperature_init)
 

@@ -130,11 +130,14 @@ fixed-size candidate pool (average recall over random 2000-object subsets of the
 
 Iteration is now ~1 minute per full run, so the cheap levers are worth trying first.
 
-1. **Regularize to close the overfit gap (cheap, now).** Add dropout to the spectrum encoder and the
-   projection heads, raise `weight_decay`, and/or shrink the spectrum encoder; add spectrum
-   augmentation (Gaussian noise, wavelength masking). Success = val loss and the train/val gap drop
-   and recall@5/@10 rise. If recall does not move while the gap closes, the ceiling (step 4 above) is
-   binding, not overfitting.
+1. **Regularize to close the overfit gap (cheap, now).** Config-gated knobs are wired (all default
+   0.0 = off, no new parameters, checkpoints stay compatible): `spectrum_encoder.dropout`,
+   `spectrum_encoder.augment_noise_std` and `augment_mask_frac` (train-only flux noise / bin masking),
+   `projection.dropout`, plus the existing `training.weight_decay`. Suggested first sweep: projection
+   and spectrum dropout 0.1-0.3, `augment_noise_std` 0.05-0.2, `augment_mask_frac` 0.1-0.3, weight
+   decay 0.05-0.2. Success = val loss and the train/val gap drop (and pool-normalized recall rises).
+   If the gap closes but retrieval does not move, the ceiling (step 4 above) is binding, not
+   overfitting.
 
 2. **More matched pairs (now the top lever).** The crossmatch yields ~137,600 good pairs (see
    "Counting available matches"), about 7x the 20k currently used. 16k train pairs is small for
