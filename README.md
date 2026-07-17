@@ -60,15 +60,27 @@ python train.py --config configs/align_smoke.yaml
 python evaluate.py --config configs/align_smoke.yaml --checkpoint checkpoints/smoke/best
 ```
 
-## Real run (single GPU; data prototyped on a laptop first)
+## Real run (single GPU, cached-feature path)
+
+This reproduces the results in `docs/phase2_findings.md`. `configs/crossmatch_legacy_desi.yaml`
+defaults to the full ~137.6k-pair build (`output.n_objects: 140000`), which streams ~40 GB from
+HuggingFace and runs the CLIP feature precompute once on the GPU. For a quick end-to-end trial, lower
+`output.n_objects` (e.g. to 20000) before building; everything downstream is identical.
 
 ```
 # Resolve and verify the HATS catalog paths in configs/crossmatch_legacy_desi.yaml first.
-python build_crossmatch.py --config configs/crossmatch_legacy_desi.yaml
-python run_baseline.py --config configs/align.yaml
-python train.py --config configs/align.yaml
-python evaluate.py --config configs/align.yaml --checkpoint checkpoints/align/best
+# Set a HuggingFace token (export HF_TOKEN=...) to avoid rate-limited 504s.
+python build_crossmatch.py    --config configs/crossmatch_legacy_desi.yaml               # ~40 GB, hours
+python precompute_features.py --config configs/align.yaml --out-dir aligned/legacy_desi_clipfeat  # CLIP once, GPU
+python run_baseline.py --config configs/align_cached.yaml
+python train.py        --config configs/align_cached.yaml
+python evaluate.py     --config configs/align_cached.yaml --checkpoint checkpoints/align_cached/best
 ```
+
+The raw `aligned/legacy_desi` build is only needed by `precompute_features`; once the cached
+`aligned/legacy_desi_clipfeat` exists you can delete the raw build to reclaim the ~40 GB. To train the
+image tower on the fly instead of caching, swap `configs/align_cached.yaml` for `configs/align.yaml`
+and skip the precompute step.
 
 ## Data sources and licensing
 
