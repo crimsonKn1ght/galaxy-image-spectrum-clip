@@ -121,8 +121,9 @@ is normalized: recall@1 lift over chance went from ~18x (20k: 0.0090 over 2000) 
 over ~13.8k), with @5/@10 similarly ~2.5x better, even though the raw recall@1 reads lower purely
 because of the larger pool.
 
-Confirmed on matched pools. Evaluating both models over random 2000-object subsets of their test
-splits (20 subsets each) puts retrieval on equal footing and removes the pool-size artifact:
+Confirmed on matched pools (`scripts/pooled_retrieval.py`). Evaluating both models over random
+2000-object subsets of their test splits (20 subsets each) puts retrieval on equal footing and removes
+the pool-size artifact:
 
 | recall@k | 20k | 138k (2000-pool) |
 |---|---|---|
@@ -149,7 +150,8 @@ Iteration is now ~1 minute per full run, so the cheap levers are worth trying fi
    and spectrum dropout 0.1-0.3, `augment_noise_std` 0.05-0.2, `augment_mask_frac` 0.1-0.3, weight
    decay 0.05-0.2. Success = val loss and the train/val gap drop (and pool-normalized recall rises).
    If the gap closes but retrieval does not move, the ceiling (step 4 above) is binding, not
-   overfitting.
+   overfitting. A ready-made regularized config is at `configs/align_cached_reg.yaml` (separate
+   output/metrics dirs so it does not overwrite the baseline `best/`).
 
 2. **More matched pairs (now the top lever).** The crossmatch yields ~137,600 good pairs (see
    "Counting available matches"), about 7x the 20k currently used. 16k train pairs is small for
