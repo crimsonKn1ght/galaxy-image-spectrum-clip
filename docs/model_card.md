@@ -20,8 +20,8 @@ AstroCLIP-style contrastive alignment of galaxy **images** (Legacy Surveys grz) 
 catalogs. A frozen CLIP ViT-L/14 image tower (features cached once) with a trainable projection, a
 small trainable 1-D CNN spectrum encoder, and a symmetric InfoNCE loss.
 
-Code: https://github.com/crimsonKn1ght/massive-data-ai — this repo stores the trained artifacts,
-metrics, precomputed features, and the full write-up (`docs/phase2_findings.md`).
+Code: https://github.com/crimsonKn1ght/galaxy-image-spectrum-clip — this repo stores the trained
+artifacts, metrics, precomputed features, and the full write-up (`docs/phase2_findings.md`).
 
 ## Repository layout
 
@@ -29,9 +29,11 @@ metrics, precomputed features, and the full write-up (`docs/phase2_findings.md`)
 full_run_110k/            main model: 110k train pairs, no regularization
   checkpoints/            model.safetensors (trainable weights only) + optimizer/scheduler + meta.json
   metrics/                baseline.json (Phase-1 untrained control) + aligned.json (evaluate output)
+  loss_curve.csv          per-checkpoint train/val loss + val recall@k (reconstructed from checkpoints)
 ab_regularized_110k/      A/B: same data with dropout + spectrum augmentation + higher weight decay
   checkpoints/
   metrics/
+  loss_curve.csv
 precomputed_features/     cached CLIP ViT-L/14 image features + resampled 1024-bin spectra + manifest
 configs/                  the exact YAML configs used
 docs/phase2_findings.md   full investigation, every result, and next steps
@@ -96,7 +98,7 @@ features as the image input (see `precomputed_features/`). To run on new raw ima
 ## Reproduce
 
 ```
-git clone https://github.com/crimsonKn1ght/massive-data-ai && cd massive-data-ai
+git clone https://github.com/crimsonKn1ght/galaxy-image-spectrum-clip && cd galaxy-image-spectrum-clip
 pip install -r requirements.txt
 export HF_TOKEN=...   # avoids rate-limited HATS reads
 python build_crossmatch.py    --config configs/crossmatch_legacy_desi.yaml   # ~40 GB (n_objects: 140000)

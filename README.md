@@ -1,4 +1,4 @@
-# massive-data-ai
+# galaxy-image-spectrum-clip
 
 Cross-modal representation learning on the Multimodal Universe (MMU).
 
