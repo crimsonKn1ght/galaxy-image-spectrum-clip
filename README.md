@@ -12,6 +12,9 @@ The design keeps the encoders mostly frozen and trains only small projection hea
 spectrum encoder, following the connector-alignment recipe: cheap to train, single-GPU friendly,
 with a synthetic path that runs end to end on CPU with no downloads.
 
+Trained weights, precomputed features, per-checkpoint loss curves, and metrics are published on
+Hugging Face: [grKnight/galaxy-image-spectrum-clip](https://huggingface.co/grKnight/galaxy-image-spectrum-clip).
+
 ## Why this is possible now
 
 The Multimodal Universe (about 100 TB across 20+ surveys) has been republished in HATS format
@@ -45,6 +48,24 @@ trainable 1D spectrum encoder with its own projection, and a learnable temperatu
 InfoNCE loss pulls each object's image and spectrum together in the shared space and pushes
 different objects apart. `evaluate.py` reruns retrieval and the redshift probe on the held-out test
 split and reports the trained model against the Phase 1 baseline.
+
+## Results
+
+The full run trains on ~110k cross-matched pairs. Image-to-spectrum retrieval on the held-out test
+split (scored over fixed 2000-object candidate pools) and a held-out linear probe onto redshift:
+
+| | recall@1 | recall@5 | recall@10 | redshift probe R² (image / spectrum) |
+|---|---|---|---|---|
+| untrained baseline | ~0.001 | ~0.003 | ~0.005 | 0.58 / 0.41 |
+| trained (110k) | 0.018 | 0.068 | 0.119 | 0.66 / 0.84 |
+
+The alignment is real but coarse: the correct spectrum lands in the top ~12% of a 2000-object pool far
+more often than chance, but seldom at rank 1, because the signal the two modalities reliably share is
+close to redshift plus broad galaxy type. Training-set size mattered most — going from 16k to 110k
+pairs roughly doubled recall@1 — and past that the frozen CLIP image tower is the limit, since its
+features were never trained on galaxy imagery. The scaling and regularization studies, the per-checkpoint
+loss curves, and the full analysis are in [`docs/phase2_findings.md`](docs/phase2_findings.md) and the
+[model repo](https://huggingface.co/grKnight/galaxy-image-spectrum-clip).
 
 ## Quick start (synthetic, CPU, no downloads)
 

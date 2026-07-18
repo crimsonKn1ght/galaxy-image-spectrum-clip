@@ -29,14 +29,14 @@ artifacts, metrics, precomputed features, and the full write-up (`docs/phase2_fi
 full_run_110k/            main model: 110k train pairs, no regularization
   checkpoints/            model.safetensors (trainable weights only) + optimizer/scheduler + meta.json
   metrics/                baseline.json (Phase-1 untrained control) + aligned.json (evaluate output)
-  loss_curve.csv          per-checkpoint train/val loss + val recall@k (reconstructed from checkpoints)
-ab_regularized_110k/      A/B: same data with dropout + spectrum augmentation + higher weight decay
+  loss_curve.csv          per-checkpoint training and validation loss + val recall@k
+ab_regularized_110k/      regularized variant: same data with dropout + spectrum augmentation + weight decay
   checkpoints/
   metrics/
   loss_curve.csv
 precomputed_features/     cached CLIP ViT-L/14 image features + resampled 1024-bin spectra + manifest
 configs/                  the exact YAML configs used
-docs/phase2_findings.md   full investigation, every result, and next steps
+docs/phase2_findings.md   training setup, results, and analysis
 README.md                 this card
 ```
 
@@ -78,7 +78,7 @@ broad galaxy type.
 ## Using a checkpoint
 
 Checkpoints hold only the trainable parts (projections + spectrum encoder + temperature); the frozen
-image tower is reconstructed at load. With the code repo:
+image tower is rebuilt at load. With the code repo:
 
 ```python
 from common import load_config, build_model, resolve_device

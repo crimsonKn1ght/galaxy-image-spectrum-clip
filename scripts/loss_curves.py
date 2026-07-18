@@ -1,13 +1,11 @@
-"""Reconstruct the per-checkpoint train/val loss (and val recall) curve for a finished run.
+"""Write a run's training/validation loss (and val recall@k) curve across its checkpoints to a CSV.
 
-Validation loss/recall at each eval step was only printed to stdout during training, but a checkpoint
-was saved at every eval step (save_steps == eval_steps), and each checkpoint stores the spectrum
-encoder's BatchNorm buffers, so reloading a checkpoint reproduces the exact model state at that step.
-This reloads every ``checkpoint-*`` in a run's output dir, recomputes val InfoNCE loss and recall@k
-over the val split, and reads the train loss logged in each checkpoint's meta.json - writing the whole
-curve to a CSV. (It evaluates saved checkpoints; it does not re-train.)
+A checkpoint is saved at every eval step and stores the spectrum encoder's BatchNorm buffers, so each
+one reproduces the exact model state at that step. This loads every ``checkpoint-*`` in a run's output
+dir, evaluates it on the val split for val InfoNCE loss and recall@k, and pairs it with the training
+loss recorded in the checkpoint's meta.json - one CSV row per step.
 
-    python scripts/reconstruct_loss_curves.py --config configs/align_cached.yaml \
+    python scripts/loss_curves.py --config configs/align_cached.yaml \
         --checkpoints-dir checkpoints/align_cached --out full_run_110k_loss_curve.csv
 """
 
